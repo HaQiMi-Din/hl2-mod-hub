@@ -12,7 +12,9 @@ mod_hub/                     ← 可部署的模组文件夹（核心交付物�
 src/
 ├── ModHubCore/             C++ 模组解析核心（纯标准库，CI 三目标编译+测试）
 │   ├── modhub_core.{h,cpp} 模组目录 / gameinfo.txt 解析
-│   └── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取
+│   ├── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取
+│   ├── lua_vm.{h,cpp}      Lua 5.1 虚拟机（GLua 兼容层 + 沙箱 + autorun/include）
+│   └── lua/                官方 Lua 5.1.5 运行时源码（MIT，含 COPYRIGHT）
 ├── ModHubEngine/           VGUI2 引擎内启动面板（需在授权 SDK 工程中编译）
 docs/                       Windows / Linux / Android 安装指南
 ```
@@ -24,11 +26,23 @@ docs/                       Windows / Linux / Android 安装指南
 | **内容层** | gameinfo.txt + cfg + 地图 | 任何 HL2 引擎构建直接运行，**含安卓起源引擎**（`-game mod_hub` 或放入模组目录） |
 | **引擎层** | C++ VGUI2 面板（`src/ModHubEngine/`） | 编译进 client 模块后，游戏内按键弹出模组列表，选中即用对应引擎启动 |
 
-引擎内"解析"由 `src/ModHubCore/` 实现，支持两类输入：
+引擎内"解析"由 `src/ModHubCore/` 实现，支持三类输入：
 - **模组目录**：扫描 sourcemods 类目录，解析 gameinfo.txt，识别引擎（HL2/GMod/CS:S/TF2/Portal），校验 SteamAppId；
-- **GMod 附加组件 (.gma)**：解析 GMA 容器头部与条目表，把地图 / 模型 / 材质 / 脚本**提取**出来供 HL2 等其他 Source 游戏使用（与 gmad / SharpGMad 等社区工具同类能力，纯 C++ 实现）。
+- **GMod 附加组件 (.gma)**：解析 GMA 容器头部与条目表，把地图 / 模型 / 材质 / 脚本**提取**出来供 HL2 等其他 Source 游戏使用（与 gmad / SharpGMad 等社区工具同类能力，纯 C++ 实现）；
+- **Lua 脚本 (.lua)**：内置 Lua 5.1 虚拟机，可执行 .gma 解包出的 `lua/autorun/*.lua` 与 `include()` 脚本（见下节）。
 
-它是纯 C++17 标准库，不依赖引擎头文件，因此可以在任意平台独立编译与测试。
+它是纯 C++17 标准库 + 官方 Lua 5.1.5（MIT），不依赖引擎头文件，因此可以在任意平台独立编译与测试。
+
+## Lua 虚拟机
+
+`src/ModHubCore/lua_vm.{h,cpp}` 提供一个可直接嵌入的 Lua 5.1 运行时——与 GMod 的 GLua 同一语言核心（GMod 实际使用 LuaJIT 2.x，语义兼容）：
+
+- **GLua 兼容层**：`print` / `Msg` / `MsgN` / `Color(r,g,b,a)` / `include(relpath)` / `SysTime`；
+- **autorun 惯例**：`RunAutorun(addonRoot)` 按文件名排序执行 `lua/autorun/*.lua`（GMod 启动加载附加组件脚本的路径约定）；
+- **沙箱**：移除 `os.execute` / `os.exit` / `os.remove` / `os.rename` / `io` / `loadfile` / `dofile` —— 脚本只能通过 `include()` 访问模组目录内文件，不能读写任意路径；
+- **嵌入 API**：`RunString` / `RunFile` / 全局变量读写，宿主（引擎内面板或独立工具）可把 VM 挂到自己的事件循环上。
+
+**如实声明的边界**：本 VM 提供 Lua 5.1 语言运行时与 GLua 基础函数；GMod 的引擎 API（`ents` / `hook` / `net` / `player` 等）依赖 GMod 引擎本身，不在本 VM 内。需要完整 GLua API 的附加组件仍必须由 GMod 运行；本 VM 面向**不依赖引擎 API 的纯逻辑脚本**（配置、计算、数据脚本）与"解包 → 运行其 autorun"的自动化。
 
 ## 快速开始
 
@@ -47,15 +61,20 @@ docs/                       Windows / Linux / Android 安装指南
 - `.github/workflows/core-build.yml`：在 **Linux x64（编译+运行测试）/ Linux ARM64（交叉编译）/ Windows x64（MinGW 交叉编译）** 三个目标上构建并验证模组解析核心；
 - `.github/workflows/validate-mod.yml`：校验模组文件夹结构与 gameinfo.txt 格式。
 
-本地快速验证：
+本地快速验证（Lua 运行时用 gcc 按 C 编译，其余按 C++ 链接）：
 
 ```bash
+mkdir -p /tmp/luaobjs
+for f in src/ModHubCore/lua/*.c; do
+  case "$f" in *lua.c|*luac.c|*print.c) continue ;; esac
+  gcc -std=c99 -O2 -w -c "$f" -o "/tmp/luaobjs/$(basename "${f%.c}").o"
+done
 g++ -std=c++17 -O2 -Wall -Wextra \
     src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
-    src/ModHubCore/gma_parser.cpp \
-    -o modhub_test && ./modhub_test
+    src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+    /tmp/luaobjs/*.o -lm -o modhub_test && ./modhub_test
 ```
 
 ## 许可证
 
-MIT License。与 Valve 无关的独立项目；Half-Life 2 / Garry's Mod / Counter-Strike 均为其各自权利人的商标。安卓引擎为第三方基于泄漏源码的移植，使用与分发请自行评估法律风险。
+MIT License（含官方 Lua 5.1.5，版权归 Lua.org / PUC-Rio，见 `src/ModHubCore/lua/COPYRIGHT`）。与 Valve 无关的独立项目；Half-Life 2 / Garry's Mod / Counter-Strike 均为其各自权利人的商标。安卓引擎为第三方基于泄漏源码的移植，使用与分发请自行评估法律风险。

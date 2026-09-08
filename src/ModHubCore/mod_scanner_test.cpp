@@ -1,12 +1,14 @@
 // HL2 Mod Hub - 模组解析核心单元测试
-// 在临时目录构造模拟模组文件夹并验证解析逻辑（含 .gma 容器解析）。
+// 在临时目录构造模拟模组文件夹并验证解析逻辑（含 .gma 容器解析与 Lua VM）。
 // 编译运行：
 //   g++ -std=c++17 -O2 -Wall -Wextra src/ModHubCore/mod_scanner_test.cpp
 //       src/ModHubCore/modhub_core.cpp src/ModHubCore/gma_parser.cpp
+//       src/ModHubCore/lua_vm.cpp [lua/*.o 由 gcc 编译] -lm
 //       -o modhub_test && ./modhub_test
 
 #include "modhub_core.h"
 #include "gma_parser.h"
+#include "lua_vm.h"
 
 #include <cstdio>
 #include <cstring>
@@ -222,6 +224,76 @@ int main() {
     }
 
     fs::remove_all(gmaRoot);
+
+    // ============================================================
+    //  Lua VM 测试
+    // ============================================================
+    const fs::path luaRoot = fs::temp_directory_path() / "modhub_lua_test";
+    fs::remove_all(luaRoot);
+    fs::create_directories(luaRoot / "lua" / "autorun");
+
+    {
+        modhub::LuaVm vm;
+        vm.SetRootDir(luaRoot.string());
+        std::string lerr;
+
+        // 基础执行 + 全局读写
+        CHECK(vm.RunString("answer = 21 * 2", "t1", lerr));
+        CHECK(lerr.empty());
+        CHECK(vm.GetGlobalInt("answer") == 42);
+
+        // GLua shim: Color
+        CHECK(vm.RunString("c = Color(255, 0, 128, 200)", "t2", lerr));
+        CHECK(lerr.empty());
+        CHECK(vm.GetGlobalFieldInt("c", "r") == 255);
+        CHECK(vm.GetGlobalFieldInt("c", "b") == 128);
+
+        // GLua shim: print / MsgN / Msg 不报错
+        CHECK(vm.RunString(
+            "print('hello from lua vm'); MsgN('msg ok'); Msg('no newline')",
+            "t3", lerr));
+
+        // 沙箱：os.execute / io / loadfile 必须不可用
+        std::string serr;
+        CHECK(!vm.RunString("os.execute('echo hi')", "s1", serr));
+        CHECK(!serr.empty());
+        serr.clear();
+        CHECK(!vm.RunString("io.open('/etc/passwd')", "s2", serr));
+        CHECK(!serr.empty());
+        serr.clear();
+        CHECK(!vm.RunString("loadfile('/etc/passwd')", "s3", serr));
+        CHECK(!serr.empty());
+
+        // include：加载 addon 根目录内脚本（可多次执行）
+        WriteFile(luaRoot / "sh_core.lua",
+                  "shared_var = shared_var or 0; shared_var = shared_var + 1\n");
+        CHECK(vm.RunString("include('sh_core.lua'); include('sh_core.lua')",
+                           "inc", lerr));
+        CHECK(vm.GetGlobalInt("shared_var") == 2);
+
+        // 版本信息
+        CHECK(modhub::LuaVmVersion().find("Lua 5.1") != std::string::npos);
+    }
+
+    // autorun：GMod 惯例 lua/autorun/*.lua，按文件名排序执行
+    {
+        WriteFile(luaRoot / "lua" / "autorun" / "a_setup.lua",
+                  "from_autorun = 'loaded'\n");
+        WriteFile(luaRoot / "lua" / "autorun" / "b_second.lua",
+                  "autorun_count = (autorun_count or 0) + 1\n");
+        modhub::LuaVm vm;
+        vm.SetRootDir(luaRoot.string());
+        std::string aerr;
+        const auto ran = modhub::RunAutorun(vm, luaRoot.string(), aerr);
+        CHECK(aerr.empty());
+        CHECK(ran.size() == 2);
+        CHECK(ran[0] == "a_setup.lua");
+        CHECK(ran[1] == "b_second.lua");
+        CHECK(vm.GetGlobalString("from_autorun") == "loaded");
+        CHECK(vm.GetGlobalInt("autorun_count") == 1);
+    }
+
+    fs::remove_all(luaRoot);
 
     if (g_failures == 0) {
         std::printf("ALL TESTS PASSED\n");

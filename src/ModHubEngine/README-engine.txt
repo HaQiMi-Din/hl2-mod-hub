@@ -35,3 +35,5 @@ ModHubEngine 引擎集成层 - 构建说明
   本仓库 CI（.github/workflows/core-build.yml）在 x64 / ARM64 / Windows
   三个目标上编译并测试 ModHubCore（模组解析逻辑）。
   引擎面板本身必须在你的 SDK 工程中编译验证。
+
+- 模组解析核心已提供 LuaVm（src/ModHubCore/lua_vm.h）——面板如需执行附加组件脚本，可嵌入该 VM 并挂到游戏事件循环。

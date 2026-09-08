@@ -11,11 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 编译并运行单元测试
+      - name: 编译 Lua 运行时（官方 Lua 5.1.5）
+        run: |
+          mkdir -p /tmp/luaobjs
+          for f in src/ModHubCore/lua/*.c; do
+            case "$f" in *lua.c|*luac.c|*print.c) continue ;; esac
+            gcc -std=c99 -O2 -w -c "$f" -o "/tmp/luaobjs/$(basename "${f%.c}").o"
+          done
+          echo "lua objects: $(ls /tmp/luaobjs | wc -l)"
+      - name: 编译并运行单元测试（含 Lua VM）
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra \
-              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp src/ModHubCore/gma_parser.cpp \
-              -o /tmp/modhub_test
+              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjs/*.o -lm -o /tmp/modhub_test
           /tmp/modhub_test
 
   build-arm64:
@@ -25,13 +34,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 ARM64 交叉编译器
         run: sudo apt-get update && sudo apt-get install -y g++-aarch64-linux-gnu
-      - name: 交叉编译（验证 ARM 架构可用）
+      - name: 交叉编译 + 链接（验证 ARM 架构可用）
         run: |
+          mkdir -p /tmp/luaobjsa
+          for f in src/ModHubCore/lua/*.c; do
+            case "$f" in *lua.c|*luac.c|*print.c) continue ;; esac
+            aarch64-linux-gnu-gcc -std=c99 -O2 -w -c "$f" -o "/tmp/luaobjsa/$(basename "${f%.c}").o"
+          done
           aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_arm64.o
-          aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/gma_parser.cpp -o /tmp/gma_parser_arm64.o
-          file /tmp/modhub_core_arm64.o /tmp/gma_parser_arm64.o
+              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjsa/*.o -lm -o /tmp/modhub_test_arm64
+          file /tmp/modhub_test_arm64
 
   build-windows:
     name: 交叉编译 模组解析核心 (Windows x64)
@@ -40,10 +54,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 MinGW 交叉编译器
         run: sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64
-      - name: 交叉编译（验证 Windows 可用）
+      - name: 交叉编译 + 链接（验证 Windows 可用）
         run: |
+          mkdir -p /tmp/luaobjsw
+          for f in src/ModHubCore/lua/*.c; do
+            case "$f" in *lua.c|*luac.c|*print.c) continue ;; esac
+            x86_64-w64-mingw32-gcc -std=c99 -O2 -w -c "$f" -o "/tmp/luaobjsw/$(basename "${f%.c}").o"
+          done
           x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_win.o
-          x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/gma_parser.cpp -o /tmp/gma_parser_win.o
-          file /tmp/modhub_core_win.o /tmp/gma_parser_win.o
+              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjsw/*.o -o /tmp/modhub_test_win.exe
+          file /tmp/modhub_test_win.exe

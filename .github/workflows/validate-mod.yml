@@ -48,14 +48,28 @@ jobs:
               if vmf.count("solid") < 6:
                   errors.append("mod_hub.vmf 固体数量异常")
 
-          # 4) C++ 核心源码
+          # 4) C++ 核心源码（含 Lua VM 与 Lua 运行时）
           for f in ["src/ModHubCore/modhub_core.h",
                     "src/ModHubCore/modhub_core.cpp",
                     "src/ModHubCore/gma_parser.h",
                     "src/ModHubCore/gma_parser.cpp",
+                    "src/ModHubCore/lua_vm.h",
+                    "src/ModHubCore/lua_vm.cpp",
+                    "src/ModHubCore/lua/lua.h",
+                    "src/ModHubCore/lua/COPYRIGHT",
                     "src/ModHubCore/mod_scanner_test.cpp"]:
               if not Path(f).exists():
                   errors.append(f"缺少 {f}")
+
+          # 5) Lua 运行时文件数（官方 Lua 5.1.5 源码，剔除独立入口）
+          lua_c = list((Path("src/ModHubCore/lua")).glob("*.c"))
+          expect = {"lua.c", "luac.c", "print.c"}
+          core = [p for p in lua_c if p.name not in expect]
+          if len(core) < 25:
+              errors.append(f"Lua 运行时源文件数异常: {len(core)}")
+          for must in ["lapi.c", "lauxlib.c", "lstrlib.c", "lvm.c", "lstate.c"]:
+              if not (Path("src/ModHubCore/lua") / must).exists():
+                  errors.append(f"缺少 Lua 运行时源文件 {must}")
 
           if errors:
               print("校验失败:")
