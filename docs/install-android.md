@@ -33,3 +33,15 @@
   分发需自行评估 Valve 版权与法律风险）；
 - 本模组内容层（gameinfo.txt / cfg / maps）与具体引擎构建无关，
   在 PC / Linux / 安卓引擎上通用。
+
+## 安卓版 gameinfo.txt 说明
+
+本移植版不解析 Steam 专用的 `|all_source_engine_paths|` 宏，且 `Game hl2` 会解析到
+App 私有目录（不存在）。mod_hub/gameinfo.txt 已包含多种路径写法兜底
+（PC 宏 / 相对路径 / 安卓绝对路径），其中：
+
+    Game    |gameinfo_path|../hl2
+    Game    /storage/emulated/0/srceng/hl2
+
+即为安卓版挂载原版 hl2 内容的关键行；不存在的路径会被引擎自动跳过。
+如你的引擎数据根目录不是 /storage/emulated/0/srceng，请把绝对路径行改为实际路径。

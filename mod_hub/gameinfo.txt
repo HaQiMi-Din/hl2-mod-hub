@@ -10,7 +10,9 @@
 		{
 			Game	|gameinfo_path|.
 			Game	hl2
+			Mod		|all_source_engine_paths|hl2
 			Game	|gameinfo_path|../hl2
+			Game	/storage/emulated/0/srceng/hl2
 		}
 	}
 }
