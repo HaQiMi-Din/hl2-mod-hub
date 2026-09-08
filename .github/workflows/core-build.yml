@@ -14,7 +14,7 @@ jobs:
       - name: 编译并运行单元测试
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra \
-              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp src/ModHubCore/gma_parser.cpp \
               -o /tmp/modhub_test
           /tmp/modhub_test
 
@@ -28,7 +28,7 @@ jobs:
       - name: 交叉编译（验证 ARM 架构可用）
         run: |
           aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_arm64.o
+              -c src/ModHubCore/modhub_core.cpp src/ModHubCore/gma_parser.cpp -o /tmp/modhub_core_arm64.o
           file /tmp/modhub_core_arm64.o
 
   build-windows:
@@ -41,5 +41,5 @@ jobs:
       - name: 交叉编译（验证 Windows 可用）
         run: |
           x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra \
-              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_win.o
+              -c src/ModHubCore/modhub_core.cpp src/ModHubCore/gma_parser.cpp -o /tmp/modhub_core_win.o
           file /tmp/modhub_core_win.o

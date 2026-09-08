@@ -11,7 +11,9 @@ mod_hub/                     ← 可部署的模组文件夹（核心交付物�
 └── README-MOD.txt          放进游戏后的使用说明
 src/
 ├── ModHubCore/             C++ 模组解析核心（纯标准库，CI 三目标编译+测试）
-└── ModHubEngine/           VGUI2 引擎内启动面板（需在授权 SDK 工程中编译）
+│   ├── modhub_core.{h,cpp} 模组目录 / gameinfo.txt 解析
+│   └── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取
+├── ModHubEngine/           VGUI2 引擎内启动面板（需在授权 SDK 工程中编译）
 docs/                       Windows / Linux / Android 安装指南
 ```
 
@@ -22,7 +24,11 @@ docs/                       Windows / Linux / Android 安装指南
 | **内容层** | gameinfo.txt + cfg + 地图 | 任何 HL2 引擎构建直接运行，**含安卓起源引擎**（`-game mod_hub` 或放入模组目录） |
 | **引擎层** | C++ VGUI2 面板（`src/ModHubEngine/`） | 编译进 client 模块后，游戏内按键弹出模组列表，选中即用对应引擎启动 |
 
-引擎内"解析"由 `src/ModHubCore/` 实现：扫描模组目录、解析 gameinfo.txt、识别引擎（HL2/GMod/CS:S/TF2/Portal）、校验 SteamAppId。它是纯 C++17 标准库，不依赖引擎头文件，因此可以在任意平台独立编译与测试。
+引擎内"解析"由 `src/ModHubCore/` 实现，支持两类输入：
+- **模组目录**：扫描 sourcemods 类目录，解析 gameinfo.txt，识别引擎（HL2/GMod/CS:S/TF2/Portal），校验 SteamAppId；
+- **GMod 附加组件 (.gma)**：解析 GMA 容器头部与条目表，把地图 / 模型 / 材质 / 脚本**提取**出来供 HL2 等其他 Source 游戏使用（与 gmad / SharpGMad 等社区工具同类能力，纯 C++ 实现）。
+
+它是纯 C++17 标准库，不依赖引擎头文件，因此可以在任意平台独立编译与测试。
 
 ## 快速开始
 
@@ -46,6 +52,7 @@ docs/                       Windows / Linux / Android 安装指南
 ```bash
 g++ -std=c++17 -O2 -Wall -Wextra \
     src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+    src/ModHubCore/gma_parser.cpp \
     -o modhub_test && ./modhub_test
 ```
 
