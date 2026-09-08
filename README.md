@@ -12,7 +12,7 @@ mod_hub/                     ← 可部署的模组文件夹（核心交付物�
 src/
 ├── ModHubCore/             C++ 模组解析核心（纯标准库，CI 三目标编译+测试）
 │   ├── modhub_core.{h,cpp} 模组目录 / gameinfo.txt 解析
-│   ├── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取
+│   ├── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取（经典 v1/v2 + 现代 v3 双布局，逐条目 CRC32 校验）
 │   ├── lua_vm.{h,cpp}      Lua 5.1 虚拟机（GLua 兼容层 + 沙箱 + autorun/include）
 │   └── lua/                官方 Lua 5.1.5 运行时源码（MIT，含 COPYRIGHT）
 ├── ModHubEngine/           VGUI2 引擎内启动面板（需在授权 SDK 工程中编译）
@@ -28,7 +28,9 @@ docs/                       Windows / Linux / Android 安装指南
 
 引擎内"解析"由 `src/ModHubCore/` 实现，支持三类输入：
 - **模组目录**：扫描 sourcemods 类目录，解析 gameinfo.txt，识别引擎（HL2/GMod/CS:S/TF2/Portal），校验 SteamAppId；
-- **GMod 附加组件 (.gma)**：解析 GMA 容器头部与条目表，把地图 / 模型 / 材质 / 脚本**提取**出来供 HL2 等其他 Source 游戏使用（与 gmad / SharpGMad 等社区工具同类能力，纯 C++ 实现）；
+- **GMod 附加组件 (.gma)**：解析 GMA 容器头部与条目表，把地图 / 模型 / 材质 / 脚本**提取**出来供 HL2 等其他 Source 游戏使用（与 gmad / SharpGMad 等社区工具同类能力，纯 C++ 实现）。自动识别两种布局并逐条目校验 CRC32：
+  - **经典 v1/v2**（Valve Wiki 文档格式：定长头部 + `[名字长度 u32][名字][大小 u64][CRC u32][偏移 u64]` 条目表）；
+  - **现代 v3**（当前 gmad 写入格式：单字节版本 + 空终止字符串头部 + `[序号 u32][路径\0][大小 u64][CRC u32]` 条目表、无偏移字段、数据区紧贴表尾）。解析结果带 `format`（`v1-classic`/`v2-classic`/`v3-modern`）与 `crc_ok` 字段，CRC 未过时仍返回结构并标注。
 - **Lua 脚本 (.lua)**：内置 Lua 5.1 虚拟机，可执行 .gma 解包出的 `lua/autorun/*.lua` 与 `include()` 脚本（见下节）。
 
 它是纯 C++17 标准库 + 官方 Lua 5.1.5（MIT），不依赖引擎头文件，因此可以在任意平台独立编译与测试。
@@ -39,10 +41,13 @@ docs/                       Windows / Linux / Android 安装指南
 
 - **GLua 兼容层**：`print` / `Msg` / `MsgN` / `Color(r,g,b,a)` / `include(relpath)` / `SysTime`；
 - **autorun 惯例**：`RunAutorun(addonRoot)` 按文件名排序执行 `lua/autorun/*.lua`（GMod 启动加载附加组件脚本的路径约定）；
+- **GLua 引擎 API 存根（登记式，不模拟引擎行为）**：`player_manager.AddValidModel/AddValidHands`、`list.Set/Get/Add`、`hook.Add/Remove`、`util.PrecacheModel/PrecacheSound`、`AddCSLuaFile`、`Vector/Angle`。存根把脚本声明的模型 / 列表登记进全局表 `modhub_registry`（分区：`playermodels` / `hands` / `lists`），宿主通过 `RegistryCount` / `RegistryField` / `RegistryListField` / `RegistryReset` 读取——即"解析附加组件声明了什么"，而不假装能跑 GMod 逻辑；
 - **沙箱**：移除 `os.execute` / `os.exit` / `os.remove` / `os.rename` / `io` / `loadfile` / `dofile` —— 脚本只能通过 `include()` 访问模组目录内文件，不能读写任意路径；
 - **嵌入 API**：`RunString` / `RunFile` / 全局变量读写，宿主（引擎内面板或独立工具）可把 VM 挂到自己的事件循环上。
 
-**如实声明的边界**：本 VM 提供 Lua 5.1 语言运行时与 GLua 基础函数；GMod 的引擎 API（`ents` / `hook` / `net` / `player` 等）依赖 GMod 引擎本身，不在本 VM 内。需要完整 GLua API 的附加组件仍必须由 GMod 运行；本 VM 面向**不依赖引擎 API 的纯逻辑脚本**（配置、计算、数据脚本）与"解包 → 运行其 autorun"的自动化。
+**真实附加组件实证**（`mod_scanner_test.cpp` 含回归测试；另用真实 Workshop .gma 验证过）：一份 33 条目、含 PM/NPC 模型 + VTF 材质 + `lua/autorun` 脚本的现代 v3 附加组件（约 24MB），被完整解析（33/33 CRC32 匹配）、脚本在 VM 中运行并登记出 `playermodels[1]=Tomorin`、`hands[1]`、`NPC[eddie_tomorin_friendly]=npc_citizen`、`NPC[eddie_tomorin_enemy]=npc_combine_s`。
+
+**如实声明的边界**：本 VM 提供 Lua 5.1 语言运行时 + GLua 基础函数 + 引擎 API 存根（登记式）。GMod 的引擎行为（`ents` / `hook` 调度 / `net` / `player` 等）依赖 GMod 引擎本身，不在本 VM 内。需要完整 GLua 行为的附加组件仍必须由 GMod 运行；本 VM 面向**纯逻辑脚本**（配置、计算、数据脚本）、"解包 → 运行其 autorun → 登记其声明（模型/NPC 等）"的自动化，以及把登记结果交给引擎层做后续处理。
 
 ## 快速开始
 

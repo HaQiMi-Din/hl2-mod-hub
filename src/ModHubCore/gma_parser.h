@@ -7,12 +7,26 @@
 //
 // 纯 C++17 标准库，无引擎依赖，可在任意平台编译与测试。
 //
-// 格式参考：
-//   https://developer.valvesoftware.com/wiki/GMA_(file_format)
-// 头部: "GMAD" + u32版本 + u64 steamid + u64 时间戳 + u64 required +
-//       char[256]名称 + char[65536]描述 + char[128]作者 + u32 版本号
-// 条目表: 循环 { u32 名称长度(=0 结束), 名称, u64 大小, u32 crc, u64 偏移 }
-// 条目表结束后为文件数据区（偏移为文件内绝对偏移）。
+// 支持的两种真实布局（自动检测，CRC 校验决定选型）：
+//
+// 1) 现代布局 v2/v3（当前 gmad / SharpGMad 读取器兼容，实测 workshop 文件）：
+//    "GMAD" + 单字节版本 + steamid u64 + 时间戳 u64
+//    + (v>=2) required content: 空终止字符串列表(空串结束)
+//    + 名称/描述/作者: 空终止字符串
+//    + addon 版本 u32
+//    + 条目表: 循环 { 序号 u32(=0 结束), 路径\0, 大小 u64, crc u32 }
+//    + 数据区: 紧随条目表，按条目顺序排列（偏移 = 表尾 + 累计）
+//
+// 2) 经典布局 v1/v2（Valve Wiki 文档格式）：
+//    "GMAD" + 版本 u32 + steamid u64 + 时间戳 u64
+//    + (v>=2) required u64
+//    + 名称 char[256] + 描述 char[65536] + 作者 char[128]
+//    + addon 版本 u32
+//    + 条目表: 循环 { 名称长度 u32(=0 结束), 路径, 大小 u64, crc u32, 偏移 u64 }
+//    + 数据区: 按条目存储的绝对偏移定位
+//
+// 解析成功后逐条目做 CRC32 校验（IEEE 802.3 / zlib 兼容），
+// 两种布局中校验通过者被采用；全部失败时报错。
 
 #pragma once
 
@@ -37,16 +51,20 @@ struct GmaHeader {
 struct GmaEntry {
     std::string name;             // 相对路径（如 maps/test.bsp）
     std::uint64_t size = 0;       // 数据大小
-    std::uint32_t crc = 0;        // 校验和（占位/校验）
+    std::uint32_t crc = 0;        // CRC32 校验和
     std::uint64_t offset = 0;     // 数据在 .gma 文件中的绝对偏移
 };
 
 struct GmaFile {
     GmaHeader header;
     std::vector<GmaEntry> entries;
+    std::string format;           // "v3-modern" / "v2-modern" / "v2-classic" / "v1-classic"
+    bool crc_ok = false;          // 全部条目 CRC32 校验是否通过
 };
 
 // 解析 .gma 容器。成功返回 true；失败返回 false 并填充 error。
+// 布局由 CRC32 校验自动选择；若结构可读但 CRC 未通过，
+// 仍返回 true 但 crc_ok=false（调用方应视为"可能损坏"）。
 bool ParseGma(const std::string& path, GmaFile& out, std::string& error);
 
 // 提取单个条目到 outDir（安全：拒绝绝对路径与 ".." 穿越）。

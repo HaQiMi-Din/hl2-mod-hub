@@ -33,6 +33,27 @@ static void WriteFile(const fs::path& p, const std::string& content) {
     f << content;
 }
 
+// CRC32 (IEEE 802.3, zlib 兼容) —— 测试构造 GMA 时用于计算真实校验和
+static std::uint32_t Crc32(const std::string& data) {
+    static std::uint32_t table[256];
+    static bool init = false;
+    if (!init) {
+        for (std::uint32_t i = 0; i < 256; ++i) {
+            std::uint32_t c = i;
+            for (int k = 0; k < 8; ++k) {
+                c = (c & 1u) ? 0xEDB88320u ^ (c >> 1) : (c >> 1);
+            }
+            table[i] = c;
+        }
+        init = true;
+    }
+    std::uint32_t c = 0xFFFFFFFFu;
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        c = table[(c ^ static_cast<unsigned char>(data[i])) & 0xFFu] ^ (c >> 8);
+    }
+    return c ^ 0xFFFFFFFFu;
+}
+
 int main() {
     const fs::path root = fs::temp_directory_path() / "modhub_test";
     fs::remove_all(root);
@@ -102,9 +123,9 @@ int main() {
 
     fs::remove_all(root);
 
-    // ============================================================
+    // =======
     //  GMA (.gma 容器) 解析测试
-    // ============================================================
+    // =======
     const fs::path gmaRoot = fs::temp_directory_path() / "modhub_gma_test";
     fs::remove_all(gmaRoot);
     fs::create_directories(gmaRoot);
@@ -152,10 +173,12 @@ int main() {
         };
 
         std::vector<std::streamoff> offsetFields;
+        std::vector<std::streamoff> crcFields;
         for (const auto& it : items) {
             wStr(it.name);
             w64(it.data.size());
-            w32(0x12345678u);                     // crc 占位
+            crcFields.push_back(f.tellp());
+            w32(0u);                              // crc 占位
             offsetFields.push_back(f.tellp());
             w64(0ULL);                            // 偏移占位
         }
@@ -173,13 +196,20 @@ int main() {
             f.write(it.data.data(),
                     static_cast<std::streamsize>(it.data.size()));
         }
+        // 回填真实 CRC32
+        for (std::size_t i = 0; i < items.size(); ++i) {
+            f.seekp(crcFields[i]);
+            w32(Crc32(items[i].data));
+        }
     }
 
-    // ---- ParseGma ----
+    // ---- ParseGma（经典 v2 布局）----
     modhub::GmaFile gma;
     std::string gmaErr;
     CHECK(modhub::ParseGma(gmaPath.string(), gma, gmaErr));
     CHECK(gmaErr.empty());
+    CHECK(gma.format == "v2-classic");
+    CHECK(gma.crc_ok);  // 全部条目 CRC32 校验通过
     CHECK(gma.header.version == 2);
     CHECK(gma.header.name == "Cool Addon");
     CHECK(gma.header.steam_id == 76561198000000000ULL);
@@ -223,11 +253,95 @@ int main() {
         CHECK(g.size() > 4 && g.substr(g.size() - 4) == ".gma");
     }
 
+    // ---- 现代 v3 布局（复刻实测 workshop .gma 结构）----
+    const fs::path gmaV3Path = gmaRoot / "workshop_addon.gma";
+    {
+        std::ofstream f(gmaV3Path, std::ios::binary);
+        auto w32 = [&](std::uint32_t v) {
+            const char b[4] = {static_cast<char>(v),
+                               static_cast<char>(v >> 8),
+                               static_cast<char>(v >> 16),
+                               static_cast<char>(v >> 24)};
+            f.write(b, 4);
+        };
+        auto w64 = [&](std::uint64_t v) {
+            char b[8];
+            for (int i = 0; i < 8; ++i) b[i] = static_cast<char>(v >> (8 * i));
+            f.write(b, 8);
+        };
+
+        f.write("GMAD", 4);
+        f.put(3);                      // 单字节版本（之后直接跟 steamid，无填充）
+        w64(0ULL);                     // steamid（实测文件为 0）
+        w64(1741071119ULL);            // timestamp
+        f.put(0);                      // required content：空串
+        const char* name = "[Test] Cool Addon (PM, NPC)";
+        f.write(name, std::strlen(name));
+        f.put(0);
+        const char* desc = "{\"description\":\"demo\",\"type\":\"servercontent\"}";
+        f.write(desc, std::strlen(desc));
+        f.put(0);
+        const char* author = "modhub";
+        f.write(author, std::strlen(author));
+        f.put(0);
+        w32(1);                        // addon version
+
+        struct Item { std::string name; std::string data; };
+        const std::vector<Item> items = {
+            {"lua/autorun/init.lua",
+             "player_manager.AddValidModel(\"Test\", \"models/t.mdl\")\n"},
+            {"models/t.mdl", std::string("\x01\x02\x03\x04\x05\x06", 6)},
+            {"materials/t.vmt", "test material"},
+        };
+        std::vector<std::streamoff> crcFields;
+        std::uint32_t seq = 0;
+        for (const auto& it : items) {
+            ++seq;
+            w32(seq);                  // 条目序号（1 起递增）
+            f.write(it.name.data(),
+                    static_cast<std::streamsize>(it.name.size()));
+            f.put(0);                  // 路径空终止
+            w64(it.data.size());
+            crcFields.push_back(f.tellp());
+            w32(0u);                   // crc 占位
+        }
+        w32(0);                        // 表终止
+        for (const auto& it : items) {
+            f.write(it.data.data(),
+                    static_cast<std::streamsize>(it.data.size()));
+        }
+        for (std::size_t i = 0; i < items.size(); ++i) {
+            f.seekp(crcFields[i]);
+            w32(Crc32(items[i].data));
+        }
+    }
+
+    modhub::GmaFile gmaV3;
+    std::string v3err;
+    CHECK(modhub::ParseGma(gmaV3Path.string(), gmaV3, v3err));
+    CHECK(v3err.empty());
+    CHECK(gmaV3.format == "v3-modern");
+    CHECK(gmaV3.crc_ok);
+    CHECK(gmaV3.header.version == 3);
+    CHECK(gmaV3.header.name == "[Test] Cool Addon (PM, NPC)");
+    CHECK(gmaV3.header.steam_id == 0);
+    CHECK(gmaV3.entries.size() == 3);
+    CHECK(gmaV3.entries[0].name == "lua/autorun/init.lua");
+    CHECK(gmaV3.entries[1].name == "models/t.mdl");
+    CHECK(gmaV3.entries[1].size == 6);
+
+    const fs::path v3out = gmaRoot / "v3extract";
+    std::string v3xerr;
+    CHECK(modhub::ExtractGmaAll(gmaV3Path.string(), gmaV3,
+                                v3out.string(), v3xerr) == 3);
+    CHECK(fs::file_size(v3out / "models" / "t.mdl") == 6);
+    CHECK(fs::is_regular_file(v3out / "lua" / "autorun" / "init.lua"));
+
     fs::remove_all(gmaRoot);
 
-    // ============================================================
+    // =======
     //  Lua VM 测试
-    // ============================================================
+    // =======
     const fs::path luaRoot = fs::temp_directory_path() / "modhub_lua_test";
     fs::remove_all(luaRoot);
     fs::create_directories(luaRoot / "lua" / "autorun");
@@ -273,6 +387,39 @@ int main() {
 
         // 版本信息
         CHECK(modhub::LuaVmVersion().find("Lua 5.1") != std::string::npos);
+    }
+
+    // GLua 引擎 API 存根：加载附加组件声明并登记（不模拟引擎行为）
+    {
+        modhub::LuaVm vm;
+        vm.SetRootDir(luaRoot.string());
+        std::string e;
+        // 与实测附加组件同构的脚本（玩家模型 + NPC 登记）
+        const std::string addonScript = R"GLUA(
+player_manager.AddValidModel( "Tomorin", "models/edward/tomorin/pm/tomorin_pm.mdl" )
+player_manager.AddValidHands( "Tomorin", "models/edward/tomorin/arms/tomorin_arms.mdl", 0, "00000000" )
+local NPC = { Name = "Tomorin(Friendly)", Class = "npc_citizen", Health = "150", Model = "models/edward/tomorin/npc/tomorin_npc.mdl" }
+list.Set( "NPC", "eddie_tomorin_friendly", NPC )
+util.PrecacheModel( "models/edward/tomorin/pm/tomorin_pm.mdl" )
+hook.Add( "Think", "test", function() end )
+AddCSLuaFile( "cl_init.lua" )
+)GLUA";
+        CHECK(vm.RunString(addonScript, "addon", e));
+        CHECK(e.empty());
+        CHECK(vm.RegistryCount("playermodels") == 1);
+        CHECK(vm.RegistryField("playermodels", 1, "name") == "Tomorin");
+        CHECK(vm.RegistryField("playermodels", 1, "model") ==
+              "models/edward/tomorin/pm/tomorin_pm.mdl");
+        CHECK(vm.RegistryCount("hands") == 1);
+        CHECK(vm.RegistryField("hands", 1, "body") == "0");
+        CHECK(vm.RegistryField("hands", 1, "skin") == "00000000");
+        CHECK(vm.RegistryListField("NPC", "eddie_tomorin_friendly",
+                                   "Class") == "npc_citizen");
+        CHECK(vm.RegistryListField("NPC", "eddie_tomorin_friendly",
+                                   "Health") == "150");
+        // 沙箱仍有效：os.execute 依旧不可用
+        std::string s2;
+        CHECK(!vm.RunString("os.execute('echo hi')", "s", s2));
     }
 
     // autorun：GMod 惯例 lua/autorun/*.lua，按文件名排序执行
