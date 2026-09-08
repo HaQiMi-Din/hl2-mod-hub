@@ -26,6 +26,14 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjs/*.o -lm -o /tmp/modhub_test
           /tmp/modhub_test
+      - name: 编译 modhub_cli 命令行工具
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra \
+              src/ModHubCore/modhub_cli.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjs/*.o -lm -o /tmp/modhub_cli
+          /tmp/modhub_cli 2>&1 | head -3
+          echo "cli build OK"
 
   build-arm64:
     name: 交叉编译 模组解析核心 (Linux ARM64)

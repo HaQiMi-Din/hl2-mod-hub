@@ -55,6 +55,7 @@ jobs:
                     "src/ModHubCore/gma_parser.cpp",
                     "src/ModHubCore/lua_vm.h",
                     "src/ModHubCore/lua_vm.cpp",
+                    "src/ModHubCore/modhub_cli.cpp",
                     "src/ModHubCore/lua/lua.h",
                     "src/ModHubCore/lua/COPYRIGHT",
                     "src/ModHubCore/mod_scanner_test.cpp"]:
