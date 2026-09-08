@@ -1,0 +1,16 @@
+"GameInfo"
+{
+	game		"HL2 Mod Hub"
+	title		"HL2 Mod Hub"
+
+	FileSystem
+	{
+		SteamAppId				220
+		SearchPaths
+		{
+			Game	|gameinfo_path|.
+			Game	hl2
+			Mod		|all_source_engine_paths|hl2
+		}
+	}
+}

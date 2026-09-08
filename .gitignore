@@ -1,0 +1,10 @@
+build/
+dist/
+__pycache__/
+*.pyc
+*.o
+*.obj
+modhub_test
+.vscode/
+.idea/
+*.log

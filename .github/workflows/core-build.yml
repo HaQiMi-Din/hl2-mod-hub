@@ -1,0 +1,45 @@
+name: core-build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-x64:
+    name: 编译+测试 模组解析核心 (Linux x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 编译并运行单元测试
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra \
+              src/ModHubCore/mod_scanner_test.cpp src/ModHubCore/modhub_core.cpp \
+              -o /tmp/modhub_test
+          /tmp/modhub_test
+
+  build-arm64:
+    name: 交叉编译 模组解析核心 (Linux ARM64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 ARM64 交叉编译器
+        run: sudo apt-get update && sudo apt-get install -y g++-aarch64-linux-gnu
+      - name: 交叉编译（验证 ARM 架构可用）
+        run: |
+          aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra \
+              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_arm64.o
+          file /tmp/modhub_core_arm64.o
+
+  build-windows:
+    name: 交叉编译 模组解析核心 (Windows x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 MinGW 交叉编译器
+        run: sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64
+      - name: 交叉编译（验证 Windows 可用）
+        run: |
+          x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra \
+              -c src/ModHubCore/modhub_core.cpp -o /tmp/modhub_core_win.o
+          file /tmp/modhub_core_win.o
