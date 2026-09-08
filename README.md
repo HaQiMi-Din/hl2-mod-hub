@@ -53,7 +53,7 @@ docs/                       Windows / Linux / Android 安装指南
 
 - **Windows**：复制 `mod_hub/` 到 `steamapps/sourcemods/` → 重启 Steam → 运行 HL2 Mod Hub（详见 `docs/install-windows.md`）
 - **Linux**：复制到 `~/.steam/steam/steamapps/sourcemods/` → `hl2_linux -game mod_hub`（详见 `docs/install-linux.md`）
-- **Android**：复制 `mod_hub/` 到安卓起源引擎（nillerusr 移植版）的内部存储模组目录（默认 `/sdcard/srceng/`），在主界面选择模组（详见 `docs/install-android.md`）
+- **Android（实测可用）**：复制 `mod_hub/` 到 `/sdcard/srceng/hl2/custom/mod_hub/`，用**原版 HL2** 启动即自动挂载内容（该移植版不靠 `-game` 切模组，详见 `docs/install-android.md`）
 
 ## 技术边界（务必阅读）
 

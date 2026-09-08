@@ -26,7 +26,8 @@ HL2 Mod Hub 模组安装与使用说明（放进游戏后的说明）
   在 Hammer(Source SDK 2013) 中打开 -> 编译(mod) -> 把生成的
   mod_hub.bsp 放到本文件夹 maps/ 下，即可在游戏内进入。
 
-五、安卓启动占位材质
-  mod_hub/materials/ 内置了引导用占位 VTF（主菜单背景与引擎基础材质），
-  使模组在安卓移植版上即使 hl2 内容未挂载也能正常启动到主菜单。
-  可被真正材质替换（游戏内正常使用 hl2 材质时无需删除）。
+五、安卓安装（实测可用方法）
+  安卓移植版不靠 -game 切换模组；官方支持 custom 内容挂载：
+  把本文件夹放到 /storage/emulated/0/srceng/hl2/custom/mod_hub/
+  后，用原版 HL2 启动，materials/ models/ maps/ 自动挂载。
+  控制台辅助命令需手动执行: exec modhub_mods.cfg
