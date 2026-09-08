@@ -26,14 +26,20 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjs/*.o -lm -o /tmp/modhub_test
           /tmp/modhub_test
-      - name: 编译 modhub_cli 命令行工具
+      - name: 编译 modhub_cli（静态链接，单文件）
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra \
+          g++ -std=c++17 -O2 -Wall -Wextra -static \
               src/ModHubCore/modhub_cli.cpp src/ModHubCore/modhub_core.cpp \
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
-              /tmp/luaobjs/*.o -lm -o /tmp/modhub_cli
-          /tmp/modhub_cli 2>&1 | head -3
-          echo "cli build OK"
+              /tmp/luaobjs/*.o -lm -o /tmp/modhub_cli-linux-x64
+          file /tmp/modhub_cli-linux-x64
+          /tmp/modhub_cli-linux-x64 2>&1 | head -2
+      - name: 上传 CLI 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: modhub_cli-linux-x64
+          path: /tmp/modhub_cli-linux-x64
+          if-no-files-found: error
 
   build-arm64:
     name: 交叉编译 模组解析核心 (Linux ARM64)
@@ -54,6 +60,19 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjsa/*.o -lm -o /tmp/modhub_test_arm64
           file /tmp/modhub_test_arm64
+      - name: 编译 modhub_cli（ARM64 静态链接，可在 Termux/安卓运行）
+        run: |
+          aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -static \
+              src/ModHubCore/modhub_cli.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjsa/*.o -lm -o /tmp/modhub_cli-linux-arm64
+          file /tmp/modhub_cli-linux-arm64
+      - name: 上传 CLI 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: modhub_cli-linux-arm64
+          path: /tmp/modhub_cli-linux-arm64
+          if-no-files-found: error
 
   build-windows:
     name: 交叉编译 模组解析核心 (Windows x64)
@@ -74,3 +93,52 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjsw/*.o -o /tmp/modhub_test_win.exe
           file /tmp/modhub_test_win.exe
+      - name: 编译 modhub_cli（Windows 静态链接，单 exe）
+        run: |
+          x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra -static \
+              src/ModHubCore/modhub_cli.cpp src/ModHubCore/modhub_core.cpp \
+              src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
+              /tmp/luaobjsw/*.o -o /tmp/modhub_cli-windows-x64.exe
+          file /tmp/modhub_cli-windows-x64.exe
+      - name: 上传 CLI 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: modhub_cli-windows-x64
+          path: /tmp/modhub_cli-windows-x64.exe
+          if-no-files-found: error
+
+  package-content:
+    name: 打包 mod_hub 内容层
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 打包模组内容层
+        run: |
+          (cd mod_hub && zip -r ../mod_hub-content.zip .)
+          ls -la mod_hub-content.zip
+      - name: 上传内容层产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod_hub-content
+          path: mod_hub-content.zip
+          if-no-files-found: error
+
+  release:
+    name: 发布 GitHub Release（tag v*）
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-x64, build-arm64, build-windows, package-content]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 列出产物
+        run: ls -laR dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

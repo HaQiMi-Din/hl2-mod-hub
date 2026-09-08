@@ -61,9 +61,25 @@ docs/                       Windows / Linux / Android 安装指南
 2. **安卓引擎现状**：安卓起源引擎（nillerusr 移植版）基于 2020 泄漏的 Source 2017 源码，可运行本模组的内容层；本仓库**不提供、不构建**该引擎二进制，引擎内 C++ 面板需自行在安卓引擎工程中编译（`ANDROID` 宏已处理平台差异）。
 3. **中心大厅地图**：`maps/mod_hub.vmf` 由仓库内的 `tools/gen_vmf.py` 生成，需在 Hammer (Source SDK 2013) 中编译为 `.bsp` 后使用。
 
+## 如何获取编译产物
+
+| 想要什么 | 去哪里拿 | 说明 |
+| --- | --- | --- |
+| **模组内容层** `mod_hub/` | Release 里的 `mod_hub-content.zip`（或直接克隆仓库） | **不需要编译**：解压放进 PC `steamapps/sourcemods/` 或安卓 `/sdcard/srceng/` 即可运行 |
+| **modhub_cli 工具** | Release 里的产物，或 Actions → core-build → 最新运行 → Artifacts | 静态链接单文件，无需安装依赖 |
+| 源码 | GitHub 仓库 | `src/` 全部 C++ 源码 + 官方 Lua 5.1.5 |
+
+三个平台产物（每次 CI 自动生成，打 `v*` tag 自动发布 Release）：
+
+- `modhub_cli-linux-x64` — Linux x64（静态）
+- `modhub_cli-linux-arm64` — **ARM64 静态链接，可在安卓 Termux / 树莓派等 ARM Linux 直接运行**（Termux 内 `chmod +x modhub_cli-linux-arm64 && ./modhub_cli`）
+- `modhub_cli-windows-x64.exe` — Windows x64（静态单文件）
+
+> 引擎内 VGUI2 面板（client.dll）需在你的授权 Source SDK 2013 工程中编译，仓库只提供源码。
+
 ## 构建与验证（GitHub Actions 云编译）
 
-- `.github/workflows/core-build.yml`：在 **Linux x64（编译+运行测试）/ Linux ARM64（交叉编译）/ Windows x64（MinGW 交叉编译）** 三个目标上构建并验证模组解析核心；
+- `.github/workflows/core-build.yml`：在 **Linux x64（编译+运行测试）/ Linux ARM64（交叉编译）/ Windows x64（MinGW 交叉编译）** 三个目标上构建并验证模组解析核心，上传 `modhub_cli` 产物、打包内容层，打 `v*` tag 时自动发布 Release；
 - `.github/workflows/validate-mod.yml`：校验模组文件夹结构与 gameinfo.txt 格式。
 
 本地快速验证（Lua 运行时用 gcc 按 C 编译，其余按 C++ 链接）：
