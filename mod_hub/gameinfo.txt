@@ -6,13 +6,31 @@
 	FileSystem
 	{
 		SteamAppId				220
+
+		//
+		// SearchPaths 写法完全镜像原版 hl2/gameinfo.txt（安卓移植版
+		// 用 |all_source_engine_paths| 解析到 srceng 根目录）。
+		// 关键：原版内容打包在 VPK 里，必须逐一声明显式挂载，
+		// 仅挂目录找不到 VPK 内的材质/模型/地图。
+		//
 		SearchPaths
 		{
-			Game	|gameinfo_path|.
-			Game	hl2
-			Mod		|all_source_engine_paths|hl2
-			Game	|gameinfo_path|../hl2
-			Game	/storage/emulated/0/srceng/hl2
+			// 本模组自身：写入路径 + 占位引导材质（mod_hub/materials/）
+			mod+mod_write+default_write_path	|gameinfo_path|.
+
+			// 原版 HL2 的 VPK（与 hl2/gameinfo.txt 相同）
+			game_lv				|all_source_engine_paths|hl2/hl2_lv.vpk
+			game+mod			|all_source_engine_paths|hl2/hl2_sound_vo_english.vpk
+			game+mod			|all_source_engine_paths|hl2/hl2_pak.vpk
+			game				|all_source_engine_paths|hl2/hl2_textures.vpk
+			game				|all_source_engine_paths|hl2/hl2_sound_misc.vpk
+			game				|all_source_engine_paths|hl2/hl2_misc.vpk
+			platform			|all_source_engine_paths|platform/platform_misc.vpk
+
+			// 松散文件目录
+			game				|all_source_engine_paths|hl2
+			platform			|all_source_engine_paths|platform
+			game				hl2
 		}
 	}
 }

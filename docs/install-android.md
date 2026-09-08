@@ -33,15 +33,15 @@
   分发需自行评估 Valve 版权与法律风险）；
 - 本模组内容层（gameinfo.txt / cfg / maps）与具体引擎构建无关，
   在 PC / Linux / 安卓引擎上通用。
+## 安卓版 gameinfo.txt 说明（实测确认）
 
-## 安卓版 gameinfo.txt 说明
+本移植版的 `|all_source_engine_paths|` 宏解析到数据根目录（`/storage/emulated/0/srceng`），
+与 PC 版原版 hl2/gameinfo.txt 行为一致。**关键**：原版 HL2 的内容几乎全部打包在 VPK 里，
+`hl2/gameinfo.txt` 会逐一声明显式挂载（hl2_textures.vpk / hl2_misc.vpk /
+hl2_sound_misc.vpk / hl2_sound_vo_english.vpk / hl2_pak.vpk / hl2_lv.vpk /
+platform_misc.vpk 等），**只挂 hl2 目录、不挂 VPK，材质/模型/地图全部找不到**。
 
-本移植版不解析 Steam 专用的 `|all_source_engine_paths|` 宏，且 `Game hl2` 会解析到
-App 私有目录（不存在）。mod_hub/gameinfo.txt 已包含多种路径写法兜底
-（PC 宏 / 相对路径 / 安卓绝对路径），其中：
+mod_hub/gameinfo.txt 已完全镜像该写法。此前多轮"背景图/基础材质找不到"的报错，
+根因即 VPK 未显式挂载；mod_hub 同时内置占位引导材质（mod_hub/materials/），
+即使 VPK 挂载异常也能启动到主菜单。
 
-    Game    |gameinfo_path|../hl2
-    Game    /storage/emulated/0/srceng/hl2
-
-即为安卓版挂载原版 hl2 内容的关键行；不存在的路径会被引擎自动跳过。
-如你的引擎数据根目录不是 /storage/emulated/0/srceng，请把绝对路径行改为实际路径。

@@ -29,8 +29,8 @@ jobs:
               for key in ["SteamAppId", "SearchPaths", "FileSystem"]:
                   if key not in text:
                       errors.append(f"gameinfo.txt 缺少 {key}")
-              if "Game" not in text:
-                  errors.append("gameinfo.txt 缺少 SearchPaths 中的 Game 定义")
+              if "game" not in text.lower():
+                  errors.append("gameinfo.txt 缺少 SearchPaths 中的 game 定义")
               m = re.search(r'"?SteamAppId"?\s*"?(\d+)"?', text)
               if not m or m.group(1) != "220":
                   errors.append("SteamAppId 应为 220 (Half-Life 2)")
