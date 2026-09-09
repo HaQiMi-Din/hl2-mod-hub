@@ -185,5 +185,5 @@ jobs:
         run: ls -laR dist
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: dist/**
           generate_release_notes: true
