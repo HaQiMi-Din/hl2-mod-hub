@@ -7,6 +7,8 @@ mod_hub/                     ← 可部署的模组文件夹（核心交付物�
 ├── gameinfo.txt            引擎入口（挂载 HL2 内容，Steam 与 -game 均可识别）
 ├── cfg/autoexec.cfg        启动即执行的引擎内引导
 ├── cfg/modhub_mods.cfg     模组登记表（引擎内控制台管理其他模组）
+├── mod/                    [GMod 附加组件存放处] 把任意 .gma 丢进来
+├── mod_unpacked/           启动时自动解包输出（引擎自动挂载进游戏）
 ├── maps/mod_hub.vmf        中心大厅地图源文件（Hammer 编译为 .bsp）
 └── README-MOD.txt          放进游戏后的使用说明
 src/
@@ -15,16 +17,17 @@ src/
 │   ├── gma_parser.{h,cpp}  GMod 附加组件 (.gma) 容器解析与内容提取（经典 v1/v2 + 现代 v3 双布局，逐条目 CRC32 校验）
 │   ├── lua_vm.{h,cpp}      Lua 5.1 虚拟机（GLua 兼容层 + 沙箱 + autorun/include）
 │   └── lua/                官方 Lua 5.1.5 运行时源码（MIT，含 COPYRIGHT）
-├── ModHubEngine/           VGUI2 引擎内启动面板（需在授权 SDK 工程中编译）
+├── ModHubEngine/           模组内置 GMA 自动加载器（gma_loader，纯 C++）+ 引擎钩子（engine_gma_hook，需授权 SDK 编译）
 docs/                       Windows / Linux / Android 安装指南
 ```
 
-## 它如何工作（两层架构）
+## 它如何工作（三层架构）
 
 | 层 | 内容 | 运行方式 |
 | --- | --- | --- |
-| **内容层** | gameinfo.txt + cfg + 地图 | 任何 HL2 引擎构建直接运行，**含安卓起源引擎**（`-game mod_hub` 或放入模组目录） |
-| **引擎层** | C++ VGUI2 面板（`src/ModHubEngine/`） | 编译进 client 模块后，游戏内按键弹出模组列表，选中即用对应引擎启动 |
+| **内容层** | gameinfo.txt + cfg + 地图 | 任何 HL2 引擎构建直接运行，**含安卓起源引擎**（`-game mod_hub` 或 `hl2/custom` 挂载） |
+| **模组内置加载器** | `gma_loader`（纯 C++）| 编进 client 模块后，启动时自动扫描 `mod/*.gma` → 解包 → 挂载进游戏，**无需 Termux/外部工具** |
+| **引擎层** | 引擎钩子 `engine_gma_hook` + VGUI2 面板 | 编译进 client 模块后，游戏内自动挂载 + 按键弹出模组列表 |
 
 引擎内"解析"由 `src/ModHubCore/` 实现，支持三类输入：
 - **模组目录**：扫描 sourcemods 类目录，解析 gameinfo.txt，识别引擎（HL2/GMod/CS:S/TF2/Portal），校验 SteamAppId；
@@ -34,6 +37,17 @@ docs/                       Windows / Linux / Android 安装指南
 - **Lua 脚本 (.lua)**：内置 Lua 5.1 虚拟机，可执行 .gma 解包出的 `lua/autorun/*.lua` 与 `include()` 脚本（见下节）。
 
 它是纯 C++17 标准库 + 官方 Lua 5.1.5（MIT），不依赖引擎头文件，因此可以在任意平台独立编译与测试。
+
+## 模组内置 GMA 自动加载器（不需要 Termux）
+
+`src/ModHubEngine/gma_loader.{h,cpp}`（纯 C++17，CI 三目标编译+18 项测试）把"解析 .gma"直接做进模组本体：
+
+1. 把任意 GMod 附加组件 `.gma` 丢进模组文件夹的 **`mod/`** 目录；
+2. 游戏启动时（引擎钩子 `engine_gma_hook`，编进 client 模块后自动调用，也可控制台 `modhub_scan` 手动触发）扫描 `mod/*.gma`；
+3. 逐个解析 + CRC32 校验，解包到 `mod_unpacked/<gma名>/`，再把解包目录 `AddSearchPath` 挂进 GAME 路径——模型 / 材质 / 地图**立即在游戏内可用**；
+4. 幂等缓存：文件未变则二次启动直接命中缓存跳过解包（manifest 记录大小 + mtime）。
+
+引擎钩子需在 Source SDK 2013 工程中编译（见 `src/ModHubEngine/README-engine.txt`）；解析与解包逻辑本身已在本仓库 CI 的 x64 / ARM64 / Windows 上编译并测试通过。
 
 ## Lua 虚拟机
 

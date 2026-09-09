@@ -31,3 +31,14 @@ HL2 Mod Hub 模组安装与使用说明（放进游戏后的说明）
   把本文件夹放到 /storage/emulated/0/srceng/hl2/custom/mod_hub/
   后，用原版 HL2 启动，materials/ models/ maps/ 自动挂载。
   控制台辅助命令需手动执行: exec modhub_mods.cfg
+
+六、mod/ 目录：模组内置 GMA 自动加载（不需要 Termux）
+  1. 在 mod_hub/ 下建 mod/ 文件夹；
+  2. 把任意 GMod 附加组件 .gma 丢进 mod/；
+  3. 启动时模组自动解析 + CRC 校验 + 解包到 mod_unpacked/，
+     内容直接挂载进游戏（模型/材质/地图立即可用）；
+  4. 运行中往 mod/ 新丢 .gma，控制台执行 modhub_scan 即时挂载。
+  说明：运行时自动解析需要引擎内代码（src/ModHubEngine 的钩子，
+  在 Source SDK 2013 工程中编译后放入 mod_hub/bin/）；纯内容层
+  部署（如安卓 hl2/custom 方式）不会自动解包 .gma——此时请把
+  .gma 解包后的 models/ materials/ 手动放进本文件夹对应目录。

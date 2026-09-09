@@ -26,6 +26,12 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjs/*.o -lm -o /tmp/modhub_test
           /tmp/modhub_test
+      - name: 编译并运行模组内置 GMA 加载器测试（gma_loader）
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Isrc/ModHubCore \
+              src/ModHubEngine/modhub_loader_test.cpp src/ModHubEngine/gma_loader.cpp \
+              src/ModHubCore/gma_parser.cpp -o /tmp/modhub_loader_test
+          /tmp/modhub_loader_test
       - name: 编译 modhub_cli（静态链接，单文件）
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -static \
@@ -60,6 +66,12 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjsa/*.o -lm -o /tmp/modhub_test_arm64
           file /tmp/modhub_test_arm64
+      - name: 交叉编译模组内置 GMA 加载器测试（ARM64）
+        run: |
+          aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -Isrc/ModHubCore \
+              src/ModHubEngine/modhub_loader_test.cpp src/ModHubEngine/gma_loader.cpp \
+              src/ModHubCore/gma_parser.cpp -o /tmp/modhub_loader_test_arm64
+          file /tmp/modhub_loader_test_arm64
       - name: 编译 modhub_cli（ARM64 静态链接，可在 Termux/安卓运行）
         run: |
           aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -static \
@@ -93,6 +105,12 @@ jobs:
               src/ModHubCore/gma_parser.cpp src/ModHubCore/lua_vm.cpp \
               /tmp/luaobjsw/*.o -o /tmp/modhub_test_win.exe
           file /tmp/modhub_test_win.exe
+      - name: 交叉编译模组内置 GMA 加载器测试（Windows）
+        run: |
+          x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra -Isrc/ModHubCore \
+              src/ModHubEngine/modhub_loader_test.cpp src/ModHubEngine/gma_loader.cpp \
+              src/ModHubCore/gma_parser.cpp -o /tmp/modhub_loader_test_win.exe
+          file /tmp/modhub_loader_test_win.exe
       - name: 编译 modhub_cli（Windows 静态链接，单 exe）
         run: |
           x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra -static \

@@ -27,12 +27,20 @@
   `exec modhub_mods.cfg`
 - 若你的引擎数据根目录不是 `/storage/emulated/0/srceng`，按实际路径放置。
 
-## 引擎内图形菜单（需要编译）
+## 引擎内图形菜单 / 运行时自动解析（需要编译）
 
-安卓版引擎的自定义 UI 需要把 `src/ModHubEngine/` 的面板代码编进为安卓构建的引擎模块
-（`ANDROID` 宏已处理平台差异）。模组解析核心 `src/ModHubCore/` 是纯标准库，
-可交叉编译到 arm64（本仓库 CI 已验证），并可直接用 `modhub_cli` 在 Termux 中
-解析/解包 .gma 附加组件。
+- **运行时自动解析 .gma（"把 .gma 丢进 mod/ 就自动挂载"）**需要引擎内代码：
+  把 `src/ModHubEngine/gma_loader.cpp` + `engine_gma_hook.cpp` + `src/ModHubCore/gma_parser.cpp`
+  编进安卓引擎工程（nillerusr 源码），初始化时调用
+  `modhub::RunModHubStartup(gameDir, filesystem, nullptr)`；
+  之后 `mod_hub/mod/*.gma` 会在启动时自动解包到 `mod_unpacked/` 并挂载。
+  说明：`hl2/custom` 内容挂载方式**不会**加载模组自定义模块，因此
+  custom 模式下不能自动解包——需要以 `-game mod_hub` 独立模组方式
+  启动（若你的移植版支持），或在安卓引擎工程中直接集成钩子。
+- 模组解析核心 `src/ModHubCore/` + `src/ModHubEngine/gma_loader.cpp` 是纯标准库，
+  可交叉编译到 arm64（本仓库 CI 已验证）。
+- 备用方案（不需要编译）：用 Release 里的 `modhub_cli-linux-arm64` 在 Termux 中
+  手动解包 .gma，把解出的 models/ materials/ 放进 `hl2/custom/mod_hub/` 对应目录。
 
 ## 法律与技术提示
 
