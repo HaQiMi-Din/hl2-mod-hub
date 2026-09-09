@@ -29,8 +29,11 @@
 
 ## 引擎内图形菜单 / 运行时自动解析（需要编译）
 
-- **运行时自动解析 .gma（"把 .gma 丢进 mod/ 就自动挂载"）**需要引擎内代码：
-  把 `src/ModHubEngine/gma_loader.cpp` + `engine_gma_hook.cpp` + `src/ModHubCore/gma_parser.cpp`
+- **不重编引擎的最简全自动方案 = 路线 C**：用 AndroidModLoader 注入
+  本仓库云编译的 `libmodhub_aml.so`（Release 附件），详见
+  `docs/install-android-aml.md`——只需给 APK 集成一次 AML，之后
+  `hl2/custom/*/mod/*.gma` 启动自动解包挂载。
+- **重编引擎方案（路线 B）**：把 `src/ModHubEngine/gma_loader.cpp` + `engine_gma_hook.cpp` + `src/ModHubCore/gma_parser.cpp`
   编进安卓引擎工程（nillerusr 源码），初始化时调用
   `modhub::RunModHubStartup(gameDir, filesystem, nullptr)`；
   之后 `mod_hub/mod/*.gma` 会在启动时自动解包到 `mod_unpacked/` 并挂载。

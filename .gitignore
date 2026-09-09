@@ -8,3 +8,8 @@ modhub_test
 .vscode/
 .idea/
 *.log
+
+# AML 模组构建产物（由 prepare.sh 生成）
+src/AMLMod/jni/mod/
+src/AMLMod/jni/gma_parser.*
+src/AMLMod/jni/gma_loader.*

@@ -125,6 +125,33 @@ jobs:
           path: /tmp/modhub_cli-windows-x64.exe
           if-no-files-found: error
 
+  build-aml-mod:
+    name: 云编译 安卓注入模组 (AML, arm64-v8a + armeabi-v7a)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 Android NDK r25c
+        run: |
+          curl -sSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q /tmp/ndk.zip -d /opt
+          ls /opt/android-ndk-r25c/ndk-build
+      - name: 同步纯逻辑源码并编译 AML 模组
+        run: |
+          bash src/AMLMod/prepare.sh
+          /opt/android-ndk-r25c/ndk-build \
+            NDK_PROJECT_PATH=$PWD/src/AMLMod \
+            APP_BUILD_SCRIPT=$PWD/src/AMLMod/jni/Android.mk \
+            NDK_APPLICATION_MK=$PWD/src/AMLMod/jni/Application.mk \
+            NDK_OUT=/tmp/amlobj NDK_LIBS_OUT=/tmp/amllibs
+          echo "--- 产物 ---"
+          find /tmp/amllibs -name '*.so' -exec file {} \;
+      - name: 上传 AML 模组产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: modhub_aml
+          path: /tmp/amllibs/**/libmodhub_aml.so
+          if-no-files-found: error
+
   package-content:
     name: 打包 mod_hub 内容层
     runs-on: ubuntu-latest
@@ -144,7 +171,7 @@ jobs:
   release:
     name: 发布 GitHub Release（tag v*）
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test-x64, build-arm64, build-windows, package-content]
+    needs: [test-x64, build-arm64, build-windows, build-aml-mod, package-content]
     runs-on: ubuntu-latest
     permissions:
       contents: write

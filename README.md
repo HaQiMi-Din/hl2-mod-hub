@@ -18,8 +18,17 @@ src/
 │   ├── lua_vm.{h,cpp}      Lua 5.1 虚拟机（GLua 兼容层 + 沙箱 + autorun/include）
 │   └── lua/                官方 Lua 5.1.5 运行时源码（MIT，含 COPYRIGHT）
 ├── ModHubEngine/           模组内置 GMA 自动加载器（gma_loader，纯 C++）+ 引擎钩子（engine_gma_hook，需授权 SDK 编译）
+├── AMLMod/                 安卓注入模组（路线 C）：AndroidModLoader .so，不用重编引擎，CI 云编译 arm64-v8a + armeabi-v7a
 docs/                       Windows / Linux / Android 安装指南
 ```
+
+## 安卓三路线（详见 docs/install-android.md 与 docs/install-android-aml.md）
+
+| 路线 | 门槛 | 自动解包 .gma？ |
+| --- | --- | --- |
+| A. custom 内容挂载 | 零编译（实测可用） | ❌ 只挂载已解包内容 |
+| B. 编译引擎 + 内置加载器 | 引擎源码 + NDK 重编 APK | ✅ |
+| C. AML 注入模组（本仓库云编译 .so） | 一次性给 APK 集成 AML，然后丢 .so | ✅ **不用重编引擎** |
 
 ## 它如何工作（三层架构）
 
@@ -48,6 +57,8 @@ docs/                       Windows / Linux / Android 安装指南
 4. 幂等缓存：文件未变则二次启动直接命中缓存跳过解包（manifest 记录大小 + mtime）。
 
 引擎钩子需在 Source SDK 2013 工程中编译（见 `src/ModHubEngine/README-engine.txt`）；解析与解包逻辑本身已在本仓库 CI 的 x64 / ARM64 / Windows 上编译并测试通过。
+
+**安卓免重编引擎版本（路线 C）**：`src/AMLMod/` 把同一套加载逻辑打包成 AndroidModLoader 注入模组（`.so`），CI 用 Android NDK 云编译 `arm64-v8a` + `armeabi-v7a` 两个架构（Release 附件 `modhub_aml`）。给起源引擎 APK 集成一次 AML 后，把 `libmodhub_aml.so` 放进 AML 的 mods 目录，即可让 `hl2/custom/*/mod/*.gma` 与 `hl2/mod/*.gma` 在启动时自动解包挂载（详见 `docs/install-android-aml.md`）。
 
 ## Lua 虚拟机
 
